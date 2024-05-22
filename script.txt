@@ -1,0 +1,145 @@
+#!/bin/bash
+
+# Función para validar nombre de usuario
+validate_username() {
+    if [[ ! "$1" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        zenity --error --text="Nombre de usuario inválido. Use solo letras, números, puntos, guiones y guiones bajos." --width=400 --height=150
+        return 1
+    fi
+    return 0
+}
+
+# Función para validar nombre de grupo
+validate_groupname() {
+    if [[ ! "$1" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        zenity --error --text="Nombre de grupo inválido. Use solo letras, números, puntos, guiones y guiones bajos." --width=400 --height=150
+        return 1
+    fi
+    return 0
+}
+
+# Función para añadir un usuario al sistema
+add_system_user() {
+    username=$(zenity --entry --title="Añadir usuario al sistema" --text="Ingrese el nombre de usuario que desea agregar al sistema:" --width=500 --height=150)
+    if [ -n "$username" ] && validate_username "$username"; then
+        password=$(zenity --password --title="Contraseña para $username" --text="Ingrese la contraseña para el usuario $username:" --width=500 --height=150)
+        if [ -n "$password" ]; then
+            sudo useradd -m "$username" && echo "$username:$password" | sudo chpasswd && zenity --info --text="Usuario $username agregado al sistema." --width=400 --height=150 || zenity --error --text="Error: No se pudo agregar el usuario $username al sistema." --width=400 --height=150
+        else
+            zenity --error --text="Error: No se ingresó una contraseña." --width=400 --height=150
+        fi
+    fi
+}
+
+# Función para eliminar un usuario del sistema
+delete_system_user() {
+    username=$(zenity --entry --title="Eliminar usuario del sistema" --text="Ingrese el nombre de usuario que desea eliminar del sistema:" --width=500 --height=150)
+    if [ -n "$username" ] && validate_username "$username"; then
+        sudo deluser --remove-home "$username" && zenity --info --text="Usuario $username eliminado del sistema." --width=400 --height=150 || zenity --error --text="Error: No se pudo eliminar el usuario $username del sistema." --width=400 --height=150
+    fi
+}
+
+# Función para añadir un usuario al dominio Samba
+add_samba_user() {
+    username=$(zenity --entry --title="Agregar usuario a Samba" --text="Ingrese el nombre de usuario que desea agregar a Samba:" --width=500 --height=150)
+    if [ -n "$username" ] && validate_username "$username"; then
+        password=$(zenity --password --title="Contraseña para Samba" --text="Ingrese la contraseña para el usuario $username en Samba:" --width=500 --height=150)
+        if [ -n "$password" ]; then
+            (echo "$password"; echo "$password") | sudo smbpasswd -a "$username" && zenity --info --text="Usuario $username añadido a Samba." --width=400 --height=150 || zenity --error --text="Error: No se pudo agregar el usuario $username a Samba." --width=400 --height=150
+        else
+            zenity --error --text="Error: No se ingresó una contraseña." --width=400 --height=150
+        fi
+    fi
+}
+
+# Función para eliminar un usuario de Samba
+delete_samba_user() {
+    username=$(zenity --entry --title="Eliminar usuario de Samba" --text="Ingrese el nombre de usuario que desea eliminar de Samba:" --width=500 --height=150)
+    if [ -n "$username" ] && validate_username "$username"; then
+        sudo smbpasswd -x "$username" && zenity --info --text="Usuario $username eliminado de Samba." --width=400 --height=150 || zenity --error --text="Error: No se pudo eliminar el usuario $username de Samba." --width=400 --height=150
+    fi
+}
+
+# Función para listar usuarios del sistema
+list_system_users() {
+    system_users=$(cut -d: -f1,4 /etc/passwd | grep -vE 'nologin|false' | awk -F: '$2>=1000 {print $1}' | zenity --text-info --title="Listar usuarios del sistema" --width=500 --height=400 --editable)
+}
+
+# Función para listar usuarios de Samba
+list_samba_users() {
+    samba_users=$(sudo pdbedit -L | zenity --text-info --title="Listar usuarios de Samba" --width=500 --height=400 --editable)
+}
+
+# Función para crear un grupo
+create_group() {
+    groupname=$(zenity --entry --title="Crear grupo" --text="Ingrese el nombre del grupo que desea crear:" --width=500 --height=150)
+    if [ -n "$groupname" ] && validate_groupname "$groupname"; then
+        sudo addgroup "$groupname" && zenity --info --text="Grupo $groupname creado." --width=400 --height=150 || zenity --error --text="Error: No se pudo crear el grupo $groupname." --width=400 --height=150
+    fi
+}
+
+# Función para eliminar un grupo
+delete_group() {
+    groupname=$(zenity --entry --title="Eliminar grupo" --text="Ingrese el nombre del grupo que desea eliminar:" --width=500 --height=150)
+    if [ -n "$groupname" ] && validate_groupname "$groupname"; then
+        sudo delgroup "$groupname" && zenity --info --text="Grupo $groupname eliminado." --width=400 --height=150 || zenity --error --text="Error: No se pudo eliminar el grupo $groupname." --width=400 --height=150
+    fi
+}
+
+# Función para añadir un usuario a un grupo
+add_user_to_group() {
+    username=$(zenity --entry --title="Añadir usuario a grupo" --text="Ingrese el nombre del usuario que desea añadir a un grupo:" --width=500 --height=150)
+    if [ -n "$username" ] && validate_username "$username"; then
+        groupname=$(zenity --entry --title="Añadir usuario a grupo" --text="Ingrese el nombre del grupo al que desea añadir el usuario:" --width=500 --height=150)
+        if [ -n "$groupname" ] && validate_groupname "$groupname"; then
+            sudo adduser "$username" "$groupname" && zenity --info --text="Usuario $username añadido al grupo $groupname." --width=400 --height=150 || zenity --error --text="Error: No se pudo añadir el usuario $username al grupo $groupname." --width=400 --height=150
+        fi
+    fi
+}
+
+# Mostrar el menú principal
+while true; do
+    choice=$(zenity --list --title="Menú" --text="Seleccione una opción:" --column="Opción" \
+        "1. Añadir usuario al sistema" \
+        "2. Eliminar usuario del sistema" \
+        "3. Agregar usuario a Samba" \
+        "4. Eliminar usuario de Samba" \
+        "5. Listar usuarios del sistema" \
+        "6. Listar usuarios de Samba" \
+        "7. Crear grupo" \
+        "8. Eliminar grupo" \
+        "9. Añadir usuario a grupo" \
+        "10. Salir" --width=600 --height=500)
+    case "$choice" in
+        "1. Añadir usuario al sistema")
+            add_system_user
+            ;;
+        "2. Eliminar usuario del sistema")
+            delete_system_user
+            ;;
+        "3. Agregar usuario a Samba")
+            add_samba_user
+            ;;
+        "4. Eliminar usuario de Samba")
+            delete_samba_user
+            ;;
+        "5. Listar usuarios del sistema")
+            list_system_users
+            ;;
+        "6. Listar usuarios de Samba")
+            list_samba_users
+            ;;
+        "7. Crear grupo")
+            create_group
+            ;;
+        "8. Eliminar grupo")
+            delete_group
+            ;;
+        "9. Añadir usuario a grupo")
+            add_user_to_group
+            ;;
+        "10. Salir")
+            exit
+            ;;
+    esac
+done
